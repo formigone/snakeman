@@ -35,6 +35,7 @@
         ArrowDown: false,
       };
       this.tail = [];
+      this.previous = null;
     }
   }
 
@@ -51,10 +52,11 @@
   }
 
   const WORLD = {
-    cols: 100,
-    rows: 50,
-    pW: 15,
-    pH: 15,
+    cols: 80,
+    rows: 40,
+    pW: 20,
+    pH: 20,
+    paused: false,
   };
 
   const canvas = document.createElement('canvas');
@@ -85,10 +87,20 @@
 
     ctx.fillStyle = '#006c00';
     ctx.fillRect((hero.x | 0) * WORLD.pW, (hero.y | 0) * WORLD.pH, hero.w, hero.h);
+    ctx.fillStyle = '#00a000';
+    hero.tail.forEach(({ x, y }) => {
+      ctx.fillRect((x | 0) * WORLD.pW, (y | 0) * WORLD.pH, hero.w, hero.h);
+      // WORLD.paused = true;
+    });
   }
 
   function tick() {
     requestAnimationFrame(tick);
+    if (WORLD.paused) {
+      return;
+    }
+
+    hero.previous = hero;
 
     if (hero.moving.ArrowRight) {
       hero.x += hero.speed;
@@ -116,10 +128,18 @@
       energy.x = Math.random() * WORLD.cols | 0;
       energy.y = Math.random() * WORLD.rows | 0;
       energy.alive = true;
+      hero.tail.push({ x: hero.x, y: hero.y });
     } else {
       energy.color = '#001bd0';
     }
 
+    // TODO: make tail work
+    let prev = hero.previous;
+    hero.tail.map(({ x, y }, i) => {
+      hero.tail[i].x = prev.x;
+      hero.tail[i].y = prev.y;
+      // prev = hero.tail[i];
+    });
     render();
   }
 
