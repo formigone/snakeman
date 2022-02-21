@@ -21,21 +21,9 @@
 </head>
 <body></body>
 <script>
-  class Player {
-    constructor(x, y, w, h, speed) {
-      this.x = x;
-      this.y = y;
-      this.w = w;
-      this.h = h;
-      this.speed = speed;
-      this.moving = {
-        ArrowLeft: false,
-        ArrowUp: false,
-        ArrowRight: false,
-        ArrowDown: false,
-      };
-      this.tail = [];
-      this.previous = null;
+  class Snake {
+    constructor(x, y) {
+      this.pieces = [[x, y]];
     }
   }
 
@@ -48,11 +36,13 @@
 
       this.alive = alive;
       this.color = '#001bd0';
+      this.originalColor = '#001bd0';
+      this.steps = 0;
     }
   }
 
   const WORLD = {
-    cols: 80,
+    cols: 90,
     rows: 40,
     pW: 20,
     pH: 20,
@@ -66,7 +56,7 @@
 
   document.body.appendChild(canvas);
 
-  const hero = new Player(5, 5, WORLD.pW, WORLD.pH, 0.15);
+  const snake = new Snake(50, 30);
   const energy = new Pill(12, 12, WORLD.pW, WORLD.pH, true);
 
   const keyboard = {
@@ -83,80 +73,101 @@
     if (energy.alive) {
       ctx.fillStyle = energy.color;
       ctx.fillRect((energy.x | 0) * WORLD.pW, (energy.y | 0) * WORLD.pH, energy.w, energy.h);
+      energy.steps += 1;
+      if (energy.steps === 0) {
+        energy.color = energy.originalColor;
+      }
     }
 
-    ctx.fillStyle = '#006c00';
-    ctx.fillRect((hero.x | 0) * WORLD.pW, (hero.y | 0) * WORLD.pH, hero.w, hero.h);
-    ctx.fillStyle = '#00a000';
-    hero.tail.forEach(({ x, y }) => {
-      ctx.fillRect((x | 0) * WORLD.pW, (y | 0) * WORLD.pH, hero.w, hero.h);
-      // WORLD.paused = true;
+    snake.pieces.forEach(([x, y], i) => {
+      if (i === 0) {
+        ctx.fillStyle = '#006c00';
+      } else {
+        ctx.fillStyle = '#00ff00';
+      }
+      ctx.fillRect(x * WORLD.pW, y * WORLD.pH, WORLD.pW, WORLD.pH);
     });
   }
 
-  function tick() {
-    requestAnimationFrame(tick);
+  let last = 0;
+  let delta = 0;
+  let DELAY = 16 * 2;
+
+  function step(t) {
+    requestAnimationFrame(step);
     if (WORLD.paused) {
       return;
     }
 
-    hero.previous = hero;
+    delta = t - last;
+    if (delta < DELAY) {
+      return;
+    }
+    last = t;
 
-    if (hero.moving.ArrowRight) {
-      hero.x += hero.speed;
-    } else if (hero.moving.ArrowLeft) {
-      hero.x -= hero.speed;
-    } else if (hero.moving.ArrowUp) {
-      hero.y -= hero.speed;
-    } else if (hero.moving.ArrowDown) {
-      hero.y += hero.speed;
+    const head = [snake.pieces[0][0], snake.pieces[0][1]];
+    const tail = snake.pieces.pop();
+
+    if (keyboard.ArrowRight) {
+      head[0] += 1;
+    } else if (keyboard.ArrowLeft) {
+      head[0] -= 1;
+    } else if (keyboard.ArrowUp) {
+      head[1] -= 1;
+    } else if (keyboard.ArrowDown) {
+      head[1] += 1;
     }
 
-    if (hero.y < 0) {
-      hero.y = WORLD.rows - 1;
-    } else if (hero.y > WORLD.rows) {
-      hero.y = 0;
-    } else if (hero.x > WORLD.cols) {
-      hero.x = 0;
-    } else if (hero.x < 0) {
-      hero.x = WORLD.cols;
+    if (head[0] < 0) {
+      head[0] = WORLD.cols;
+    } else if (head[0] > WORLD.cols) {
+      head[0] = 0;
+    } else if (head[1] > WORLD.rows) {
+      head[1] = 0;
+    } else if (head[1] < 0) {
+      head[1] = WORLD.rows;
     }
 
-    if ((hero.x | 0) === (energy.x | 0) && (hero.y | 0) === (energy.y | 0)) {
+    snake.pieces.unshift(head);
+
+    if (snake.pieces[0][0] === energy.x && snake.pieces[0][1] === energy.y) {
       energy.color = '#cc0000';
+      energy.steps = -25;
       energy.alive = false;
       energy.x = Math.random() * WORLD.cols | 0;
       energy.y = Math.random() * WORLD.rows | 0;
       energy.alive = true;
-      hero.tail.push({ x: hero.x, y: hero.y });
-    } else {
-      energy.color = '#001bd0';
+
+      snake.pieces.push(tail);
     }
 
-    // TODO: make tail work
-    let prev = hero.previous;
-    hero.tail.map(({ x, y }, i) => {
-      hero.tail[i].x = prev.x;
-      hero.tail[i].y = prev.y;
-      // prev = hero.tail[i];
-    });
     render();
   }
 
   document.addEventListener('keydown', (event) => {
-    keyboard[event.code] = true;
     if (['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].indexOf(event.code) >= 0) {
-      Object.keys(hero.moving).forEach((dir) => {
-        hero.moving[dir] = false;
+      if (
+        (keyboard.ArrowDown && event.code === 'ArrowUp') ||
+        (keyboard.ArrowUp && event.code === 'ArrowDown') ||
+        (keyboard.ArrowRight && event.code === 'ArrowLeft') ||
+        (keyboard.ArrowLeft && event.code === 'ArrowRight')) {
+        return;
+      }
+      Object.keys(keyboard).forEach((k) => {
+        keyboard[k] = false;
       });
-      hero.moving[event.code] = true;
+    } else {
+      WORLD.paused = true;
     }
+    keyboard[event.code] = true;
   });
 
   document.addEventListener('keyup', (event) => {
-    keyboard[event.code] = false;
+    if (['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].indexOf(event.code) < 0) {
+      WORLD.paused = false;
+    }
   });
 
-  tick();
+  requestAnimationFrame(step);
 </script>
 </html>
