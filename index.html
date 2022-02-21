@@ -16,6 +16,8 @@
             display: block;
             margin: 2em auto;
             box-shadow: 0 0 10px #aaa;
+            height: 100%;
+            image-rendering: pixelated;
         }
     </style>
 </head>
@@ -23,7 +25,7 @@
 <script>
   class Snake {
     constructor(x, y) {
-      this.pieces = [[x, y]];
+      this.pieces = [[x, y, 'head_right_01']];
     }
   }
 
@@ -44,10 +46,16 @@
   const WORLD = {
     cols: 90,
     rows: 40,
-    pW: 20,
-    pH: 20,
+    pW: 16,
+    pH: 16,
     paused: false,
   };
+
+  const MAPS = [
+    [
+      [],
+    ]
+  ];
 
   const canvas = document.createElement('canvas');
   canvas.width = WORLD.pW * WORLD.cols;
@@ -58,8 +66,8 @@
 
   const energy = new Pill((Math.random() * (WORLD.cols - 10) | 0) + 5, (Math.random() * (WORLD.rows - 10) | 0) + 5, WORLD.pW, WORLD.pH, true);
   const snake = new Snake(50, 30);
-  for(let i = 0; i < 3; i++) {
-    snake.pieces.push([50, 30]);
+  for (let i = 0; i < 3; i++) {
+    snake.pieces.push([50, 30, 'body_hor_r']);
   }
 
   const keyboard = {
@@ -70,21 +78,49 @@
   };
 
   function render() {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // ctx.fillStyle = '#fff';
+    // ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < WORLD.rows; y++) {
+      for (let x = 0; x < WORLD.cols; x++) {
+        ctx.drawImage(ASSETS.bg_01, x * WORLD.pW, y * WORLD.pW, WORLD.pW, WORLD.pH);
+      }
+    }
 
     if (energy.alive) {
       ctx.fillStyle = energy.color;
       ctx.fillRect((energy.x | 0) * WORLD.pW, (energy.y | 0) * WORLD.pH, energy.w, energy.h);
     }
 
-    snake.pieces.forEach(([x, y], i) => {
-      if (i === 0) {
-        ctx.fillStyle = '#006c00';
-      } else {
-        ctx.fillStyle = '#00ff00';
+    snake.pieces.forEach((_, i) => {
+      if (WORLD.paused) {
+        return;
       }
-      ctx.fillRect(x * WORLD.pW, y * WORLD.pH, WORLD.pW, WORLD.pH);
+      i = snake.pieces.length - i - 1;
+      const [x, y, dir] = snake.pieces[i];
+      let img = ASSETS[dir];
+      if (i === 0) {
+        // ctx.fillStyle = '#006c00';
+        ctx.drawImage(img, x * WORLD.pW, y * WORLD.pH, WORLD.pW, WORLD.pH);
+      } else {
+        // ctx.fillStyle = '#00ff00';
+        // ctx.fillRect(x * WORLD.pW, y * WORLD.pH, WORLD.pW, WORLD.pH);
+        if (dir === 'head_right_01') {
+          img = ASSETS.body_hor_r;
+        } else if (dir === 'head_left_01') {
+          img = ASSETS.body_hor_l;
+        } else if (dir === 'head_up_01') {
+          img = ASSETS.body_ver_r;
+        } else if (dir === 'head_down_01') {
+          img = ASSETS.body_ver_l;
+        }
+        try {
+            ctx.drawImage(img, x * WORLD.pW, y * WORLD.pH, WORLD.pW, WORLD.pH);
+        } catch (error) {
+          WORLD.paused = true;
+          console.log('>>>> ', img, dir, error);
+          return
+        }
+      }
     });
   }
 
@@ -104,17 +140,43 @@
     }
     last = t;
 
-    const head = [snake.pieces[0][0], snake.pieces[0][1]];
+    const head = [snake.pieces[0][0], snake.pieces[0][1], snake.pieces[0][2]];
     const tail = snake.pieces.pop();
+    const prevDir = head[2];
+    let corner = null;
 
     if (keyboard.ArrowRight) {
       head[0] += 1;
+      head[2] = 'head_right_01';
+      if (prevDir === head[2]) {
+        corner = 'body_hor_r';
+      } else {
+          corner = prevDir === 'head_up_01' ? 'body_corner_tl' : 'body_corner_bl';
+      }
     } else if (keyboard.ArrowLeft) {
       head[0] -= 1;
+      head[2] = 'head_left_01';
+      if (prevDir === head[2]) {
+        corner = 'body_hor_l';
+      }  else {
+        corner = prevDir === 'head_up_01' ? 'body_corner_tr' : 'body_corner_br';
+      }
     } else if (keyboard.ArrowUp) {
       head[1] -= 1;
+      head[2] = 'head_up_01';
+      if (prevDir === head[2]) {
+        corner = 'body_ver_r';
+      }  else {
+          corner = prevDir === 'head_left_01' ? 'body_corner_bl' : 'body_corner_br';
+      }
     } else if (keyboard.ArrowDown) {
       head[1] += 1;
+      head[2] = 'head_down_01';
+      if (prevDir === head[2]) {
+        corner = 'body_ver_l';
+      }  else {
+        corner = prevDir === 'head_left_01' ? 'body_corner_tl' : 'body_corner_tr';
+      }
     }
 
     if (head[0] < 0) {
@@ -128,6 +190,9 @@
     }
 
     snake.pieces.unshift(head);
+    if (snake.pieces.length > 1 && corner) {
+      snake.pieces[1][2] = corner;
+    }
 
     energy.steps += 1;
     if (energy.steps === 0) {
@@ -139,13 +204,13 @@
       energy.steps = -25;
       energy.alive = false;
       while (true) {
-          energy.x = (Math.random() * (WORLD.cols - 10) | 0) + 5;
-          energy.y = (Math.random() * (WORLD.rows - 10) | 0) + 5;
-          let good = true;
-          snake.pieces.forEach(([x, y]) => {
-            if (energy.x === x && energy.y === y) {
-              good = false;
-            }
+        energy.x = (Math.random() * (WORLD.cols - 10) | 0) + 5;
+        energy.y = (Math.random() * (WORLD.rows - 10) | 0) + 5;
+        let good = true;
+        snake.pieces.forEach(([x, y]) => {
+          if (energy.x === x && energy.y === y) {
+            good = false;
+          }
         });
         if (good) {
           break;
@@ -183,6 +248,39 @@
     }
   });
 
-  requestAnimationFrame(step);
+  let assetsLoaded = 0;
+  const ASSETS = {
+    'bg_01': '/assets/images/snake-bg-tile-001.png',
+    'head_right_01': '/assets/images/snake-body-head-r-001.png',
+    'head_left_01': '/assets/images/snake-body-head-l-001.png',
+    'head_up_01': '/assets/images/snake-body-head-u-001.png',
+    'head_down_01': '/assets/images/snake-body-head-d-001.png',
+    'body_hor_r': '/assets/images/snake-body-tile-hor-001.png',
+    'body_hor_l': '/assets/images/snake-body-tile-hor-002.png',
+    'body_ver_r': '/assets/images/snake-body-tile-ver-001.png',
+    'body_ver_l': '/assets/images/snake-body-tile-ver-002.png',
+    'body_corner_bl': '/assets/images/snake-body-tile-bl-001.png',
+    'body_corner_br': '/assets/images/snake-body-tile-br-001.png',
+    'body_corner_tl': '/assets/images/snake-body-tile-tl-001.png',
+    'body_corner_tr': '/assets/images/snake-body-tile-tr-001.png',
+  };
+
+  function loadAssets() {
+    Object.keys(ASSETS).forEach((key) => {
+      const img = document.createElement('img');
+      // document.body.appendChild(img);
+      img.addEventListener('load', () => {
+        ASSETS[key] = img;
+        assetsLoaded += 1;
+
+        if (assetsLoaded === Object.keys(ASSETS).length) {
+          requestAnimationFrame(step);
+        }
+      });
+      img.src = ASSETS[key];
+    });
+  }
+
+  loadAssets();
 </script>
 </html>
